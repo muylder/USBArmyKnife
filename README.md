@@ -117,8 +117,8 @@ To trigger DuckyScript payloads from across the room:
 
 ## 🤝 Contributing & Support
 
-- **Questions?** Check the [Discussions](https://github.com/i-am-shodan/USBArmyKnife/discussions).
-- **Bugs?** Raise an [Issue](https://github.com/i-am-shodan/USBArmyKnife/issues).
+Forked from **https://github.com/i-am-shodan/USBArmyKnife**
+and **https://github.com/bob-reis/USBArmyKnife_PP_Tech_Version**
 
 ## 📄 License
 
