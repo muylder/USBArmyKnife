@@ -901,6 +901,37 @@ static int handleRandomDelay(const std::string &str, const std::unordered_map<st
     return false;
 }
 
+static int handleEDRBenchmark(const std::string &str, const std::unordered_map<std::string, std::string> &constants, const std::unordered_map<std::string, int> &variables)
+{
+    std::string arg = str.substr(str.find(' ') + 1);
+    int testId = atoi(arg.c_str());
+    
+    Debug::Log.info(LOG_DUCKY, "Running Benign EDR Benchmark Test: " + std::to_string(testId));
+    
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+    Attacks::Blue::Logger.logCommand("EDR_BENCHMARK", "Test " + std::to_string(testId), 0);
+#endif
+
+    if (testId == 1)
+    {
+        Debug::Log.info(LOG_DUCKY, "Simulating registry run keys audit...");
+        // Benign simulation: trigger standard Calculator
+        Devices::USB::HID.consumer_device_keypress(HID_USAGE_CONSUMER_AL_CALCULATOR);
+    }
+    else if (testId == 2)
+    {
+        Debug::Log.info(LOG_DUCKY, "Simulating UAC query check...");
+        Devices::USB::HID.consumer_device_keypress(HID_USAGE_CONSUMER_AL_CALCULATOR);
+    }
+    else if (testId == 3)
+    {
+        Debug::Log.info(LOG_DUCKY, "Simulating benign audit log file creation...");
+        Devices::USB::HID.consumer_device_keypress(HID_USAGE_CONSUMER_AL_CALCULATOR);
+    }
+    
+    return true;
+}
+
 static int handleIsWiFiConnected(const std::string &str, const std::unordered_map<std::string, std::string> &constants, const std::unordered_map<std::string, int> &variables)
 {
     return Devices::WiFi.getState();
@@ -974,6 +1005,9 @@ void addDuckyScriptExtensions(
     extCommands["WAIT_FOR_SCROLL_CHANGE"] = handleWaitForScrollChange;
     extCommands["WAIT_FOR_SCROLL_ON"] = handleWaitForScrollOn;
     extCommands["WAIT_FOR_SCROLL_OFF"] = handleWaitForScrollOff;
+
+    // EDR Benchmark
+    extCommands["EDR_BENCHMARK"] = handleEDRBenchmark;
 
     // Agent
     extCommands["AGENT_RUN"] = handleAgentRun;

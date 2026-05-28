@@ -4,6 +4,11 @@
 
 #include "../../Devices/Storage/HardwareStorage.h"
 #include "../../Debug/Logging.h"
+
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+#include "../../Attacks/Blue/Telemetry.h"
+#endif
+
 #define TAG_USB "USB"
 #define LOGICAL_BLOCK_SIZE 512
 
@@ -16,6 +21,14 @@ static File mscFile;
 static int32_t msc_read_cb(uint32_t lba, void *buffer, uint32_t bufsize)
 {
     Devices::USB::MSC.setActivityStateState(true);
+
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+    static unsigned long lastReadAlert = 0;
+    if (millis() - lastReadAlert > 5000) {
+        Attacks::Blue::Logger.logCommand("honeypot_alert", "MSC Read Activity Detected");
+        lastReadAlert = millis();
+    }
+#endif
 
     if (strlen(mscFile.name()) != 0)
     {
@@ -53,6 +66,14 @@ static int32_t msc_read_cb(uint32_t lba, void *buffer, uint32_t bufsize)
 static int32_t msc_write_cb(uint32_t lba, uint8_t *buffer, uint32_t bufsize)
 {
     Devices::USB::MSC.setActivityStateState(true);
+
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+    static unsigned long lastWriteAlert = 0;
+    if (millis() - lastWriteAlert > 5000) {
+        Attacks::Blue::Logger.logCommand("honeypot_alert", "MSC Write Activity Detected");
+        lastWriteAlert = millis();
+    }
+#endif
 
     if (strlen(mscFile.name()) != 0)
     {

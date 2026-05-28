@@ -27,6 +27,17 @@ void loop() {}
 #include "Attacks/Shadow/ShadowVolume.h"
 #include "Attacks/Agent/Agent.h"
 
+#ifdef ENABLE_RED_TEAM_COVERT_BLE
+#include "Attacks/Red/BLETerminal.h"
+#endif
+
+#include "Attacks/Red/CaptivePortal.h"
+
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+#include "Attacks/Blue/Telemetry.h"
+#include "Attacks/Blue/NetworkScanner.h"
+#endif
+
 #include "Debug/Logging.h"
 #include "AuxiliaryComponent/Auxiliary.h"
 
@@ -40,6 +51,27 @@ static Auxiliary aux;
 static BoardSupport board;
 static unsigned long lastHeapCheck = 0;
 static const uint32_t LOW_HEAP_THRESHOLD = 20 * 1024; // 20KB
+
+#ifdef ARDUINO_ARCH_ESP32
+void networkTask(void *pvParameters) {
+  while (true) {
+    Devices::WiFi.loop(prefs);
+    
+#ifdef ENABLE_RED_TEAM_COVERT_BLE
+    Attacks::Red::BLE.loop(prefs);
+#endif
+
+    Attacks::Red::Portal.loop(prefs);
+
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+    Attacks::Blue::Logger.loop(prefs);
+    Attacks::Blue::Scanner.loop(prefs);
+#endif
+
+    vTaskDelay(pdMS_TO_TICKS(10)); // Yield to network watchdog
+  }
+}
+#endif
 
 void setup()
 {
@@ -75,6 +107,17 @@ void setup()
   Attacks::Eap.begin(prefs);
   Attacks::GhostStorage.begin(prefs);
   Attacks::Agent.begin(prefs);
+
+#ifdef ENABLE_RED_TEAM_COVERT_BLE
+  Attacks::Red::BLE.begin(prefs);
+#endif
+
+  Attacks::Red::Portal.begin(prefs);
+
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+  Attacks::Blue::Logger.begin(prefs);
+  Attacks::Blue::Scanner.begin(prefs);
+#endif
 
   if (!Devices::Storage.isRunning())
   {
@@ -135,6 +178,17 @@ void setup()
   Debug::Log.info(TAG, versionStr);
 
   aux.begin(prefs);
+
+#ifdef ARDUINO_ARCH_ESP32
+  xTaskCreatePinnedToCore(
+    networkTask,      /* Task function. */
+    "NetworkTask",    /* name of task. */
+    8192,             /* Stack size of task */
+    NULL,             /* parameter of the task */
+    1,                /* priority of the task */
+    NULL,             /* Task handle to keep track of created task */
+    0);               /* pin task to core 0 */
+#endif
 }
 
 void loop()
@@ -145,7 +199,9 @@ void loop()
   Debug::Log.loop(prefs);
 
   Devices::USB::Core.loop(prefs);
+#ifndef ARDUINO_ARCH_ESP32
   Devices::WiFi.loop(prefs);
+#endif
   Devices::Storage.loop(prefs);
   Devices::Button.loop(prefs);
   Devices::LED.loop(prefs);
@@ -162,6 +218,16 @@ void loop()
   Attacks::Eap.loop(prefs);
   Attacks::GhostStorage.loop(prefs);
   Attacks::Agent.loop(prefs);
+
+#ifndef ARDUINO_ARCH_ESP32
+#ifdef ENABLE_RED_TEAM_COVERT_BLE
+  Attacks::Red::BLE.loop(prefs);
+#endif
+
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+  Attacks::Blue::Logger.loop(prefs);
+#endif
+#endif
 
   aux.loop(prefs);
   

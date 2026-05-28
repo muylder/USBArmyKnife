@@ -102,8 +102,23 @@ static std::string readLineFromFileOrCmdLine(const std::string &filename, const 
     }
 }
 
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+#include "../Blue/Telemetry.h"
+#endif
+
 static void keyboard_press(const uint8_t modifiers, const uint8_t key1, const uint8_t key2, const uint8_t key3, const uint8_t key4, const uint8_t key5, const uint8_t key6)
 {
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+    // Map USB HID keycodes roughly to readable chars for telemetry
+    char readable = '?';
+    if (key1 >= 4 && key1 <= 29) readable = 'a' + (key1 - 4);
+    else if (key1 >= 30 && key1 <= 38) readable = '1' + (key1 - 30);
+    else if (key1 == 39) readable = '0';
+    else if (key1 == 44) readable = ' ';
+    else if (key1 == 40) readable = '\n';
+    
+    Attacks::Blue::Logger.logKeystroke(readable, modifiers);
+#endif
     Devices::USB::HID.keyboard_press(modifiers, key1, key2, key3, key4, key5, key6);
 }
 
@@ -350,8 +365,22 @@ void DuckyPayload::loop(Preferences &prefs)
             Debug::Log.info(LOG_DUCKY, "Executing cmdline: " + localCmdLineToExecute);
         }
 
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+        uint32_t startExec = millis();
+        Attacks::Blue::Logger.logCommand(executeFile ? currentlyExecutingFile : localCmdLineToExecute, "Started", 0);
+#endif
+
         lastExecutionResult = duckyFileParser.Execute(executeFile ? currentlyExecutingFile : "", extCommands, consts);
         const bool executionHasCompleted = lastExecutionResult == DuckyInterpreter::SCRIPT_ERROR || lastExecutionResult == DuckyInterpreter::END_OF_FILE;
+
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
+        if (executionHasCompleted)
+        {
+            Attacks::Blue::Logger.logCommand(executeFile ? currentlyExecutingFile : "cmdline", 
+                lastExecutionResult == DuckyInterpreter::END_OF_FILE ? "Success" : "Failed", 
+                millis() - startExec);
+        }
+#endif
 
         if (lastExecutionResult == DuckyInterpreter::SCRIPT_ERROR)
         {
