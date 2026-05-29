@@ -54,7 +54,7 @@ To compile and flash the USBArmyKnife to your hardware, you will need **Platform
 ### Prerequisites
 1. Install [Visual Studio Code](https://code.visualstudio.com/).
 2. Install the **PlatformIO IDE** extension in VS Code.
-3. Clone this repository: `git clone https://github.com/muylder/USBArmyKnife_PP_Tech_Version.git`
+3. Clone this repository: `git clone https://github.com/muylder/USBArmyKnife.git`
 
 ### Flashing Steps
 1. Open the cloned folder in VS Code.
