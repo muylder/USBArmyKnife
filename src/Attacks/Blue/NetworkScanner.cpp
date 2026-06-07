@@ -55,7 +55,9 @@ void NetworkScanner::loop(Preferences& prefs) {
       if (client.connect(ip, port)) {
         std::string msg = "Open Port Found: " + std::string(ip) + ":" + std::to_string(port);
         Debug::Log.info(TAG_SCANNER, msg);
+#ifdef ENABLE_BLUE_TEAM_TELEMETRY
         Attacks::Blue::Logger.logCommand("network_scanner", msg);
+#endif
         client.stop();
       }
 

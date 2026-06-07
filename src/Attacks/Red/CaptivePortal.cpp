@@ -21,6 +21,7 @@ void CaptivePortal::begin(Preferences& prefs) {
   // Start DNS Server on port 53, intercept all queries ("*")
   // and resolve to the ESP32's current IP address
   if (Devices::WiFi.getState() && WiFi.getMode() == WIFI_MODE_AP) {
+    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
     dnsServer.start(53, "*", WiFi.softAPIP());
     Debug::Log.info(TAG_CAPTIVE, "Captive Portal DNS Server started.");
     isEnabled = true;
